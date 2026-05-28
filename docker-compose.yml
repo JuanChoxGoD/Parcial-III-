@@ -1,0 +1,88 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: dhabi_postgres
+    environment:
+      POSTGRES_USER: dhabi_user
+      POSTGRES_PASSWORD: dhabi_pass
+      POSTGRES_DB: dhabi_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dhabi_network
+
+  mongodb:
+    image: mongo:6.0
+    container_name: dhabi_mongodb
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - dhabi_network
+
+  aldeamo_mock:
+    build: ./aldeamo_mock
+    container_name: aldeamo_mock
+    environment:
+      ALDEAMO_FAIL: "false"
+    networks:
+      - dhabi_network
+
+  twilio_mock:
+    build: ./twilio_mock
+    container_name: twilio_mock
+    environment:
+      TWILIO_FAIL: "false"
+    networks:
+      - dhabi_network
+
+  command_service:
+    build: ./command_service
+    container_name: command_service
+    environment:
+      DATABASE_URL: "postgresql://dhabi_user:dhabi_pass@postgres:5432/dhabi_db"
+      MONGODB_URL: "mongodb://mongodb:27017"
+      MONGODB_DB: "dhabi_notifications"
+      ALDEAMO_URL: "http://aldeamo_mock:8100/sms/send"
+      TWILIO_URL: "http://twilio_mock:8101/sms/send"
+    depends_on:
+      - postgres
+      - mongodb
+      - aldeamo_mock
+      - twilio_mock
+    networks:
+      - dhabi_network
+
+  query_service:
+    build: ./query_service
+    container_name: query_service
+    environment:
+      MONGODB_URL: "mongodb://mongodb:27017"
+      MONGODB_DB: "dhabi_notifications"
+    depends_on:
+      - mongodb
+    networks:
+      - dhabi_network
+
+  gateway_service:
+    build: ./gateway_service
+    container_name: gateway_service
+    environment:
+      DHABI_JWT_SECRET: "dhabi-secret-2024"
+      COMMAND_URL: "http://command_service:8001"
+      QUERY_URL: "http://query_service:8002"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - command_service
+      - query_service
+    networks:
+      - dhabi_network
+
+volumes:
+  postgres_data:
+  mongodb_data:
+
+networks:
+  dhabi_network:
+    name: dhabi_network
+    driver: bridge
