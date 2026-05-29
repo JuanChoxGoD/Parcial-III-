@@ -88,11 +88,23 @@ Abre una nueva terminal en tu equipo host para ejecutar los siguientes comandos 
 ### Paso A: Enviar un código OTP (Escritura - Command)
 Enviaremos una petición a través del Gateway. El Gateway validará el token y enrutará la petición al `command_service`. El sistema guardará el registro como `PENDING` en PostgreSQL y lanzará un hilo background para completar el envío asíncronamente con Aldeamo (proveedor por defecto en estado `CLOSED`).
 
+**Linux/Mac (Bash):**
 ```bash
 curl -X POST http://localhost:8000/api/v1/send-otp \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkaGFiaS1hZG1pbiIsInVzZXJfaWQiOiJ1MTIzIiwicm9sZSI6ImFkbWluIiwiZXhwIjoyNTI0NjA4MDAwfQ.KZg-9J5WKISq08JSjVQUKluWbH9lgVBY_EV1e3T4yL8" \
   -H "Content-Type: application/json" \
   -d '{"user_id": "u123", "phone": "+573001234567", "otp": "482910"}'
+```
+
+**Windows (PowerShell):**
+```powershell
+$headers = @{
+    "Authorization" = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkaGFiaS1hZG1pbiIsInVzZXJfaWQiOiJ1MTIzIiwicm9sZSI6ImFkbWluIiwiZXhwIjoyNTI0NjA4MDAwfQ.KZg-9J5WKISq08JSjVQUKluWbH9lgVBY_EV1e3T4yL8"
+    "Content-Type" = "application/json"
+}
+$body = '{"user_id": "u123", "phone": "+573001234567", "otp": "482910"}'
+$response = Invoke-RestMethod -Uri "http://localhost:8000/api/v1/send-otp" -Method POST -Headers $headers -Body $body
+$response.Content
 ```
 
 *Respuesta esperada (HTTP 202 de inmediato):*
@@ -103,9 +115,19 @@ curl -X POST http://localhost:8000/api/v1/send-otp \
 ### Paso B: Consultar el historial del usuario (Lectura - Query)
 Consultamos el historial del usuario a través del Gateway. Esta petición se procesa en el `query_service` leyendo directamente **MongoDB** (sin tocar PostgreSQL), demostrando la separación CQRS. Dado que la sincronización es casi instantánea en el hilo background, verás el estado actualizado a `SENT` y con el proveedor `aldeamo`.
 
+**Linux/Mac (Bash):**
 ```bash
 curl -X GET http://localhost:8000/api/v1/notifications/u123 \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkaGFiaS1hZG1pbiIsInVzZXJfaWQiOiJ1MTIzIiwicm9sZSI6ImFkbWluIiwiZXhwIjoyNTI0NjA4MDAwfQ.KZg-9J5WKISq08JSjVQUKluWbH9lgVBY_EV1e3T4yL8"
+```
+
+**Windows (PowerShell):**
+```powershell
+$headers = @{
+    "Authorization" = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkaGFiaS1hZG1pbiIsInVzZXJfaWQiOiJ1MTIzIiwicm9sZSI6ImFkbWluIiwiZXhwIjoyNTI0NjA4MDAwfQ.KZg-9J5WKISq08JSjVQUKluWbH9lgVBY_EV1e3T4yL8"
+}
+$response = Invoke-RestMethod -Uri "http://localhost:8000/api/v1/notifications/u123" -Method GET -Headers $headers
+$response.Content
 ```
 
 *Respuesta esperada:*
@@ -154,6 +176,7 @@ docker-compose stop aldeamo_mock
 ### PASO 2: Enviar 6 peticiones seguidas al endpoint send-otp
 Enviaremos peticiones seguidas para acumular fallos en Aldeamo y obligar al Circuit Breaker a pasar al estado `OPEN` (umbral >= 5 fallos):
 
+**Linux/Mac (Bash):**
 ```bash
 # Ejecutar este bloque de curls en tu terminal
 for i in {1..6}; do
@@ -163,6 +186,20 @@ for i in {1..6}; do
     -d '{"user_id": "u123", "phone": "+573001234567", "otp": "99900'$i'"}'
   echo ""
 done
+```
+
+**Windows (PowerShell):**
+```powershell
+$headers = @{
+    "Authorization" = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkaGFiaS1hZG1pbiIsInVzZXJfaWQiOiJ1MTIzIiwicm9sZSI6ImFkbWluIiwiZXhwIjoyNTI0NjA4MDAwfQ.KZg-9J5WKISq08JSjVQUKluWbH9lgVBY_EV1e3T4yL8"
+    "Content-Type" = "application/json"
+}
+1..6 | ForEach-Object {
+    $body = '{"user_id": "u123", "phone": "+573001234567", "otp": "99900' + $_ + '"}'
+    Write-Host "Enviando peticion $_..."
+    $response = Invoke-RestMethod -Uri "http://localhost:8000/api/v1/send-otp" -Method POST -Headers $headers -Body $body
+    $response.Content
+}
 ```
 
 ### PASO 3: Observar logs del `command_service` y verificar transiciones
@@ -175,9 +212,19 @@ Mira la terminal donde se está ejecutando `docker-compose`. Verás mensajes det
 ### PASO 4: Verificar historial en PostgreSQL y MongoDB
 Consulta las notificaciones en MongoDB para confirmar que los envíos tuvieron éxito pero ahora registran proveedor **twilio**:
 
+**Linux/Mac (Bash):**
 ```bash
 curl -X GET http://localhost:8000/api/v1/notifications/u123 \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkaGFiaS1hZG1pbiIsInVzZXJfaWQiOiJ1MTIzIiwicm9sZSI6ImFkbWluIiwiZXhwIjoyNTI0NjA4MDAwfQ.KZg-9J5WKISq08JSjVQUKluWbH9lgVBY_EV1e3T4yL8"
+```
+
+**Windows (PowerShell):**
+```powershell
+$headers = @{
+    "Authorization" = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkaGFiaS1hZG1pbiIsInVzZXJfaWQiOiJ1MTIzIiwicm9sZSI6ImFkbWluIiwiZXhwIjoyNTI0NjA4MDAwfQ.KZg-9J5WKISq08JSjVQUKluWbH9lgVBY_EV1e3T4yL8"
+}
+$response = Invoke-RestMethod -Uri "http://localhost:8000/api/v1/notifications/u123" -Method GET -Headers $headers
+$response.Content
 ```
 
 *Verás que las últimas notificaciones tienen `"provider": "twilio"` y `"status": "SENT"`, confirmando la resiliencia del sistema.*
@@ -191,12 +238,26 @@ docker-compose start aldeamo_mock
 
 1. **Espera 60 segundos** sin hacer envíos (cooldown de recuperación).
 2. Envía **1 petición** adicional de OTP:
+
+   **Linux/Mac (Bash):**
    ```bash
    curl -X POST http://localhost:8000/api/v1/send-otp \
      -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkaGFiaS1hZG1pbiIsInVzZXJfaWQiOiJ1MTIzIiwicm9sZSI6ImFkbWluIiwiZXhwIjoyNTI0NjA4MDAwfQ.KZg-9J5WKISq08JSjVQUKluWbH9lgVBY_EV1e3T4yL8" \
      -H "Content-Type: application/json" \
      -d '{"user_id": "u123", "phone": "+573001234567", "otp": "777888"}'
    ```
+
+   **Windows (PowerShell):**
+   ```powershell
+   $headers = @{
+       "Authorization" = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkaGFiaS1hZG1pbiIsInVzZXJfaWQiOiJ1MTIzIiwicm9sZSI6ImFkbWluIiwiZXhwIjoyNTI0NjA4MDAwfQ.KZg-9J5WKISq08JSjVQUKluWbH9lgVBY_EV1e3T4yL8"
+       "Content-Type" = "application/json"
+   }
+   $body = '{"user_id": "u123", "phone": "+573001234567", "otp": "777888"}'
+   $response = Invoke-RestMethod -Uri "http://localhost:8000/api/v1/send-otp" -Method POST -Headers $headers -Body $body
+   $response.Content
+   ```
+
 3. Observa los logs del `command_service`:
    - Al pasar los 60 segundos, el breaker pasa a `HALF_OPEN`.
    - Deja pasar esta petición única a Aldeamo.
